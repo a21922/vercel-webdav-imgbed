@@ -1,11 +1,9 @@
+import nextConnect from "next-connect";
+import multer from "multer";
 import { createClient } from "webdav";
-import formidable from "formidable";
-import fs from "fs";
 import sharp from "sharp";
 
-export const config = {
-  api: { bodyParser: false },
-};
+const upload = multer(); // 内存存储
 
 const client = createClient(
   process.env.WEBDAV_URL,
@@ -15,40 +13,49 @@ const client = createClient(
   }
 );
 
-export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+const apiRoute = nextConnect({
+  onError(error, req, res) {
+    res.status(501).json({ error: `Something went wrong: ${error.message}` });
+  },
+  onNoMatch(req, res) {
+    res.status(405).json({ error: `Method '${req.method}' not allowed` });
+  },
+});
 
-  const form = formidable({ multiples: true });
+apiRoute.use(upload.array("file"));
 
-  form.parse(req, async (err, fields, files) => {
-    if (err) return res.status(500).json({ error: err.message });
+apiRoute.post(async (req, res) => {
+  const result = [];
 
-    const fileArray = Array.isArray(files.file) ? files.file : [files.file];
-    const result = [];
+  for (const file of req.files) {
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${file.originalname}`;
+    const thumbName = `${timestamp}-thumb-${file.originalname}`;
 
-    for (const file of fileArray) {
-      const fileData = fs.readFileSync(file.filepath);
-      const timestamp = Date.now();
-      const fileName = `${timestamp}-${file.originalFilename}`;
-      const thumbName = `${timestamp}-thumb-${file.originalFilename}`;
+    try {
+      // 上传原图
+      await client.putFileContents(`${process.env.WEBDAV_BASE_PATH}${fileName}`, file.buffer, { overwrite: true });
 
-      try {
-        // 上传原图
-        await client.putFileContents(`${process.env.WEBDAV_BASE_PATH}${fileName}`, fileData, { overwrite: true });
+      // 生成缩略图
+      const thumbBuffer = await sharp(file.buffer).resize({ width: 200 }).toBuffer();
+      await client.putFileContents(`${process.env.WEBDAV_BASE_PATH}${thumbName}`, thumbBuffer, { overwrite: true });
 
-        // 生成缩略图（宽度 200px）
-        const thumbBuffer = await sharp(fileData).resize({ width: 200 }).toBuffer();
-        await client.putFileContents(`${process.env.WEBDAV_BASE_PATH}${thumbName}`, thumbBuffer, { overwrite: true });
-
-        result.push({
-          url: `${process.env.BASE_IMAGE_URL}${fileName}`,
-          thumbUrl: `${process.env.BASE_IMAGE_URL}${thumbName}`,
-        });
-      } catch (error) {
-        result.push({ error: error.message });
-      }
+      result.push({
+        url: `${process.env.BASE_IMAGE_URL}${fileName}`,
+        thumbUrl: `${process.env.BASE_IMAGE_URL}${thumbName}`,
+      });
+    } catch (error) {
+      result.push({ error: error.message });
     }
+  }
 
-    res.status(200).json(result);
-  });
-}
+  res.status(200).json(result);
+});
+
+export const config = {
+  api: {
+    bodyParser: false, // 必须禁用内置 bodyParser
+  },
+};
+
+export default apiRoute;
