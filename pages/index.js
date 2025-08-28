@@ -3,7 +3,6 @@ import { useState, useEffect } from "react";
 export default function Home() {
   const [uploaded, setUploaded] = useState([]);
 
-  // 上传文件
   const handleUpload = async (fileList) => {
     if (!fileList || fileList.length === 0) return;
     const formData = new FormData();
@@ -14,20 +13,17 @@ export default function Home() {
     setUploaded((prev) => [...prev, ...data]);
   };
 
-  // 粘贴上传
   useEffect(() => {
     const handlePaste = (e) => {
       const items = e.clipboardData.items;
       const pastedFiles = [];
       for (let i = 0; i < items.length; i++) {
         if (items[i].kind === "file") {
-          const blob = items[i].getAsFile();
-          pastedFiles.push(blob);
+          pastedFiles.push(items[i].getAsFile());
         }
       }
       if (pastedFiles.length > 0) handleUpload(pastedFiles);
     };
-
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
   }, []);
