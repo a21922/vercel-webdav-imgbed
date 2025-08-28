@@ -8,11 +8,12 @@
     "start": "next start"
   },
   "dependencies": {
-    "formidable": "^3.6.0",
     "next": "13.5.6",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "sharp": "^0.32.1",
-    "webdav": "^4.6.0"
+    "webdav": "^4.6.0",
+    "multer": "^1.4.5-lts.1",
+    "next-connect": "^0.12.2"
   }
 }
